@@ -1,7 +1,6 @@
 # redcap
 Scripts for interacting with RedCap via API
 
-
 ## upload_csv_to_redcap.py [options] pid input_filename
 
 Read CSV file or stdin made to be loaded into redcap via the import tool and update project using API.
