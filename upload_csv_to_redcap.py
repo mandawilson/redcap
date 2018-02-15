@@ -25,8 +25,7 @@ def update_redcap(expected_ids, pid, current_rows, overwrite="normal", return_co
   if verbose:
     print "LOG: updated:", updated
   if "error" in updated:
-    print >> sys.stderr, "ERROR: failed to update record(s).  Message is '%s'.  JSON is '%s'" % (updated["error"], row)
-    print >> sys.stderr, [row]
+    print >> sys.stderr, "ERROR: failed to update record(s).  Message is '%s'.  JSON is '%s'" % (updated["error"], updated)
     sys.exit()
 
   failed_to_update = expected_ids - set(updated)
@@ -67,7 +66,7 @@ except getopt.GetoptError as err:
   usage()
   sys.exit(1)
 
-if args < 1:
+if len(args) < 1:
   print >> sys.stderr, "ERROR: project id is required"
   usage()
   sys.exit(1)
