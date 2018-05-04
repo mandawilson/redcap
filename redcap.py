@@ -57,7 +57,7 @@ def download_backup(pid, verbose=False):
   data = {
     'token': redcap_config.pids_to_tokens[pid],
     'content': 'project_xml',
-    'returnFormat': 'jsoXn',
+    'returnFormat': 'json',
     'exportSurveyFields': 'true',
     'exportDataAccessGroups': 'true',
     'exportFiles': 'true',
@@ -76,3 +76,110 @@ def download_backup(pid, verbose=False):
   if response_code != 200:
     raise RuntimeError("Response code '%d' returned expecting '200'.  Error is '%s'" % (response_code, body))
   return body
+
+def get_instruments(pid, verbose=False):
+  """Returns the list of instruments in the project, ordered as they are in the project"""
+  buf = cStringIO.StringIO()
+  data = {
+      'token': redcap_config.pids_to_tokens[pid],
+      'content': 'instrument',
+      'format': 'json',
+      'returnFormat': 'json'
+  }
+  curl = pycurl.Curl()
+  curl.setopt(curl.URL, redcap_config.api_url)
+  curl.setopt(curl.HTTPPOST, data.items())
+  curl.setopt(curl.WRITEFUNCTION, buf.write)
+  curl.setopt(pycurl.SSL_VERIFYPEER, 0)
+  curl.setopt(pycurl.SSL_VERIFYHOST, 0)
+  curl.perform()
+  response_code = curl.getinfo(curl.RESPONSE_CODE)
+  curl.close()
+  body = buf.getvalue()
+  buf.close()
+  if response_code != 200:
+    raise RuntimeError("Response code '%d' returned expecting '200'.  Error is '%s'" % (response_code, body))
+  return json.load(StringIO(body))
+
+def get_instrument_metadata(pid, instrument_name, verbose=False):
+  """Get metadata for instrument.  WARNING this does not include repeating instrument fields."""
+  buf = cStringIO.StringIO()
+  data = {
+      'token': redcap_config.pids_to_tokens[pid],
+      'content': 'metadata',
+      'format': 'json',
+      'returnFormat': 'json',
+      'forms[0]': str(instrument_name)
+  }
+  curl = pycurl.Curl()
+  curl.setopt(curl.URL, redcap_config.api_url)
+  curl.setopt(curl.HTTPPOST, data.items())
+  curl.setopt(curl.WRITEFUNCTION, buf.write)
+  curl.setopt(pycurl.SSL_VERIFYPEER, 0)
+  curl.setopt(pycurl.SSL_VERIFYHOST, 0)
+  curl.perform()
+  response_code = curl.getinfo(curl.RESPONSE_CODE)
+  curl.close()
+  body = buf.getvalue()
+  buf.close()
+  if response_code != 200:
+    raise RuntimeError("Response code '%d' returned expecting '200'.  Error is '%s'" % (response_code, body))
+  return json.load(StringIO(body))
+
+def get_records(pid, instrument_name, primary_key, verbose=False):
+  """Get the records for an instruments.  Note unless
+      this is the primary table, it does not include the primary record
+      id."""
+  buf = cStringIO.StringIO()
+  data = {
+      'token': redcap_config.pids_to_tokens[pid],
+      'content': 'record',
+      'format': 'json',
+      'type': 'flat',
+      'forms[0]': str(instrument_name),
+      'fields[0]': str(primary_key),
+      'rawOrLabel': 'raw',
+      'rawOrLabelHeaders': 'raw',
+      'exportCheckboxLabel': 'false',
+      'exportSurveyFields': 'false',
+      'exportDataAccessGroups': 'false',
+      'returnFormat': 'json'
+  }
+  curl = pycurl.Curl()
+  curl.setopt(curl.URL, redcap_config.api_url)
+  curl.setopt(curl.HTTPPOST, data.items())
+  curl.setopt(curl.WRITEFUNCTION, buf.write)
+  curl.setopt(pycurl.SSL_VERIFYPEER, 0)
+  curl.setopt(pycurl.SSL_VERIFYHOST, 0)
+  curl.perform()
+  response_code = curl.getinfo(curl.RESPONSE_CODE)
+  curl.close()
+  body = buf.getvalue()
+  buf.close()
+  if response_code != 200:
+    raise RuntimeError("Response code '%d' returned expecting '200'.  Error is '%s'" % (response_code, body))
+  return json.load(StringIO(body))
+
+def delete_record(pid, record_id, verbose=False):
+  """Delete all data for a record (e.g. patient), across all instruments"""
+  buf = cStringIO.StringIO()
+  data = {
+      'token': redcap_config.pids_to_tokens[pid],
+      'action': 'delete',
+      'content': 'record',
+      'records[0]': record_id
+  }
+  ch = pycurl.Curl()
+  curl.setopt(curl.URL, redcap_config.api_url)
+  curl.setopt(curl.HTTPPOST, data.items())
+  curl.setopt(curl.WRITEFUNCTION, buf.write)
+  curl.setopt(pycurl.SSL_VERIFYPEER, 0)
+  curl.setopt(pycurl.SSL_VERIFYHOST, 0)
+  curl.perform()
+  response_code = curl.getinfo(curl.RESPONSE_CODE)
+  curl.close()
+  body = buf.getvalue()
+  buf.close()
+  if response_code != 200:
+    raise RuntimeError("Response code '%d' returned expecting '200'.  Error is '%s'" % (response_code, body))
+  return json.load(StringIO(body))
