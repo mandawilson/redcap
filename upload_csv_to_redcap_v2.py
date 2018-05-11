@@ -1,6 +1,10 @@
-# TODO check 'grep P-0017103 test.log'
-# How did I download 3 "old rows" and end up with 2 old row keys, only one looks correct?  
-# And why didn't the correct keys match?  THey look the same, was it a utf8 difference?
+# TODO trim fields from input file
+# TODO we found modified value, but not new/deleted fields
+#   make sure we get everything from `diff modified_darwin_eight_batches.csv /data/redcap_scratch/darwin_eight_batches.csv`
+# TODO then delete any patient with modifed/deleted data, and add all their data back
+# TODO then add any new fields (do not add if already added to deleted patient)
+# WARNING this is ignoring *_complete fields TODO add back
+# TODO check headers are the same
 import redcap
 import redcap_config
 import sys
@@ -21,6 +25,7 @@ instruments_to_record_id_to_key_to_new_dict = defaultdict(lambda: defaultdict(la
 with open(csv_filename, 'rb') as csv_file:
   csvreader = csv.DictReader(csv_file, delimiter=',', quotechar='"')
   for row in csvreader:
+    # TODO Redcap is trimming the fields (I think), we should too
     instrument_name = row["redcap_repeat_instrument"] if row["redcap_repeat_instrument"] else primary_key 
     # TODO this should not be included in the CSV file
     del row["redcap_repeat_instance"] # this might be different, so remove it from the record
@@ -37,11 +42,22 @@ for instrument in instruments:
     print "LOG: downloading rows for %s" % (instrument["instrument_name"])
   old_rows = redcap.get_records(pid, instrument["instrument_name"], primary_key, verbose)
   for row in old_rows:
-    print "LOG: downloaded row", row
+    #print "LOG: downloaded row", row
     if "redcap_repeat_instance" in row:
+      if row["redcap_repeat_instance"] == "":
+	if verbose:
+          print "LOG: skipping row '%s' because it is a redcap_repeat_instance row with no redcap_repeat_instance, it is just an empty row with only patient id set" % (row)
+        continue
       max_repeat_instance = max(max_repeat_instance, row["redcap_repeat_instance"])
       del row["redcap_repeat_instance"]
-    record_ids_to_key_to_old_dict[row[primary_key]]["".join([v for k,v in sorted(row.items())])] = row
+    # TODO remove this, we should probably include this column in the input file
+    #   or somehow set it to be an optional column
+    if "redcap_repeat_instrument" in row:
+      del row["%s_complete" % (row["redcap_repeat_instrument"])]
+
+    key = "".join([str(v) for k,v in sorted(row.items())])
+    #print "LOG: saving key '%s', row '%s'" % (key, row)
+    record_ids_to_key_to_old_dict[row[primary_key]][key] = row
 
   # TODO make sure headers are the same
   # now loop through each new record id and figure out if anything changed
@@ -50,12 +66,11 @@ for instrument in instruments:
     for key in key_to_new_dict:
       if verbose:
         print "LOG: checking record '%s' with key '%s'" % (record_id, key)
-	for old_key in record_ids_to_key_to_old_dict[record_id]:
-	  print "LOG: old_key = ", old_key
-      if key in record_ids_to_key_to_old_dict[record_id]:
-        print "Found '%s' in old records" % (key)
-      else:
+	#for old_key in record_ids_to_key_to_old_dict[record_id].iterkeys():
+	#  print "LOG: old_key = '%s', key is type '%s'" % (old_key, type(old_key))
+      if key not in record_ids_to_key_to_old_dict[record_id]:
         print "Did NOT find '%s' in old records" % (key)
 	print "Example:", record_ids_to_key_to_old_dict[record_id].iterkeys().next() 
-    sys.exit()
-
+      #else:
+      #  print "Found '%s' in old records" % (key)
+    #sys.exit()
