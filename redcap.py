@@ -145,6 +145,8 @@ def get_records(pid, instrument_name, primary_key, verbose=False):
       'exportDataAccessGroups': 'false',
       'returnFormat': 'json'
   }
+  if verbose:
+    print "LOG:", data
   curl = pycurl.Curl()
   curl.setopt(curl.URL, redcap_config.api_url)
   curl.setopt(curl.HTTPPOST, data.items())
@@ -169,7 +171,7 @@ def delete_record(pid, record_id, verbose=False):
       'content': 'record',
       'records[0]': record_id
   }
-  ch = pycurl.Curl()
+  curl = pycurl.Curl()
   curl.setopt(curl.URL, redcap_config.api_url)
   curl.setopt(curl.HTTPPOST, data.items())
   curl.setopt(curl.WRITEFUNCTION, buf.write)

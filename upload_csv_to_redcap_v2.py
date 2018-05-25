@@ -6,7 +6,7 @@
 #   upload_csv_to_redcap.py [options] pid input_filename
 #     Options:
 #       -k, --key key_name Primary key for RedCap study, default is record_id
-#       -c, --chunk chunk_size Number of records to upload in one POST request, default is 100
+#       -c, --chunk chunk_size Number of records to upload in one POST request, default is 100 (CURRENTLY IGNORED)
 #       -d, --delete if a record in RedCap is missing from this file (entire record, not just one row of data)
 #           then delete it from RedCap.  By default we delete rows but not entire records)
 #       -f, --force update RedCap, by default this will be a dry run with no changes made to RedCap
@@ -18,7 +18,7 @@
 # TODO actually update redcap -- I backed up database already just run with -f option - do twice, second time with -d option
 #   then use original file to get things back to the way they were
 # TODO make sure we get everything from `diff modified_darwin_eight_batches.csv /data/redcap_scratch/darwin_eight_batches.csv`
-# WARNING this is ignoring *_complete fields TODO add back
+# WARNING this is ignoring *_complete fields TODO add back?
 import redcap
 import redcap_config
 import sys
@@ -36,20 +36,24 @@ def update_redcap(expected_ids, pid, current_rows, overwrite="normal", return_co
     print "LOG: updated:", updated
   if "error" in updated:
     print >> sys.stderr, "ERROR: failed to update record(s).  Message is '%s'.  JSON is '%s'" % (updated["error"], updated)
-    sys.exit()
 
   failed_to_update = expected_ids - set(updated)
   if failed_to_update: 
     print >> sys.stderr, "ERROR: failed to update record(s): '%s'" % (",".join(failed_to_update))
+    sys.exit(1)
 
 def get_data_ready_for_redcap(full_record_data, verbose=False):
-  for row in full_record_data:
+  updated_record = []
+  instrument_to_next_redcap_repeat_instance = defaultdict(int)
+  for row in full_record_data.values():
     # if this is a redcap_repeat_instrument, set the redcap_repeat_instance
-    if row["redcap_repeat_instrument"]:
+    if "redcap_repeat_instrument" in row and row["redcap_repeat_instrument"]:
       instrument_to_next_redcap_repeat_instance[row["redcap_repeat_instrument"]] += 1
       row["redcap_repeat_instance"] = instrument_to_next_redcap_repeat_instance[row["redcap_repeat_instrument"]] 
     if verbose:
-      print "LOG: updated/added Redcap row is '%s'" % (",".join([ "%s:%s" % (k, v) for k,v in row.enumerate()]))
+      print "LOG: updated/added Redcap row is '%s'" % (",".join([ "%s:%s" % (k, v) for k,v in row.iteritems()]))
+    updated_record.append(row)
+  return updated_record  
 
 def run(pid, input_stream, primary_key, chunk, delete=False, force=False, verbose=False):
   record_id_to_key_to_new_dict = defaultdict(lambda: defaultdict(dict))
@@ -142,10 +146,10 @@ def run(pid, input_stream, primary_key, chunk, delete=False, force=False, verbos
   if verbose: 
     print "LOG: %d records in old set" % (len(old_record_id_set))
     print "LOG: %d records in new set" % (len(new_record_id_set))
-    print "LOG: %d added records" % (len(added_record_ids))
-    print "LOG: %d deleted records" % (len(deleted_record_ids))
+    print "LOG: %d added records: '%s'" % (len(added_record_ids), ",".join(added_record_ids))
+    print "LOG: %d deleted records: '%s'" % (len(deleted_record_ids), ",".join(deleted_record_ids))
     print "LOG: Deleting the above records? %s" % (delete)
-    print "LOG: %d records changed" % (len(changed_record_ids))
+    print "LOG: %d records changed: '%s'" % (len(changed_record_ids), ",".join(changed_record_ids))
   
   # TODO delete data for modified records and deleted records
   record_ids_to_delete = changed_record_ids
@@ -153,22 +157,31 @@ def run(pid, input_stream, primary_key, chunk, delete=False, force=False, verbos
   if delete:
     record_ids_to_delete = record_ids_to_delete | deleted_record_ids
   record_ids_to_add = changed_record_ids | added_record_ids
+  if verbose:
+    print "LOG: we will actually delete %d records from Redcap: '%s'" % (len(record_ids_to_delete), ",".join(record_ids_to_delete))
+    print "LOG: we will then add/add back %d records to Redcap '%s'" % (len(record_ids_to_add), ",".join(record_ids_to_add))
   for record_id in record_ids_to_delete:
     if force:
       if verbose:
         print "LOG: deleting record '%s'" % (record_id)
-      redcap.delete_record(pid, record_id, verbose)
+      redcap_deleted_record_count = redcap.delete_record(pid, record_id, verbose)
+      if redcap_deleted_record_count != 1:
+        print >> sys.stderr, "ERROR: failed to delete record '%s'" % (record_id)
+      else:
+        if verbose:
+          print "LOG: successfully deleted record '%s' from RedCap" % (record_id)
     else:
       if verbose:
         print "LOG: [TEST NOT] deleting record '%s'" % (record_id)
+
   for record_id in record_ids_to_add:
     if force:
       if verbose:
         print "LOG: adding record '%s'" % (record_id)
       # TODO get rows for record_id
       # TODO fill in instrument index number
-      redcap_data = get_data_ready_for_redcap(record_id_to_key_to_new_dict, verbose)
-      update_redcap([record_id], pid, redcap_data, overwrite="normal", return_content="ids", verbose=verbose)
+      redcap_data = get_data_ready_for_redcap(record_id_to_key_to_new_dict[record_id], verbose)
+      update_redcap(set([record_id]), pid, redcap_data, overwrite="normal", return_content="ids", verbose=verbose)
     else:
       if verbose:
         print "LOG: [TEST NOT] adding record '%s'" % (record_id)
