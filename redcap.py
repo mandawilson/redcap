@@ -7,6 +7,10 @@ import sys
 
 
 def escape_str(field_for_json):
+  # TODO first only espace quotes if they are not already escaped?
+  # import re
+  # re.sub(r'([^\\])"', '\g<1>\\"', field_for_json)
+  # and then remove quote escaping below
   return field_for_json.replace("\\", "\\\\").replace("\b", "\\b").replace("\f", "\\f").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t").replace("\"", "\\\"")
 
 def update_records(pid, list_of_fields_to_values, overwrite="overwrite", return_content="count", verbose=False):

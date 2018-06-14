@@ -35,7 +35,7 @@ def download_large_project(pid, primary_key, verbose):
     for key in sorted_header:
       if key not in row:
         row[key] = ""
-    print ",".join(["\"%s\"" % (v) for k,v in sorted(row.items())])
+    print ",".join(["\"%s\"" % (v.strip().strip("\"") if isinstance(v, unicode) or isinstance(v, str) else v) for k,v in sorted(row.items())])
 
 def usage():
   print "Usage:"

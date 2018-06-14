@@ -63,10 +63,12 @@ def run(pid, input_stream, primary_key, chunk, delete=False, force=False, verbos
   # TODO need the field mapping, and it needs to define the record_id
   # read in CSV and store instrument -> record id -> rows
   # these are the 'new' records
-  csvreader = csv.DictReader(input_stream, delimiter=',', quotechar='"')
+  csvreader = csv.DictReader(input_stream, quotechar='"', delimiter=',', skipinitialspace=True)
   for row in csvreader:
     # Redcap is trimming the fields (I think), we should too
-    row = { k:v.strip() for k, v in row.iteritems()}
+    if verbose:
+        print row
+    row = { k: (v.strip() if v else v) for k, v in row.iteritems()}
     instrument_name = row["redcap_repeat_instrument"] if row["redcap_repeat_instrument"] else primary_key 
     # TODO this should not be included in the CSV file
     del row["redcap_repeat_instance"] # this might be different, so remove it from the record
