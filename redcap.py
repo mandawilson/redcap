@@ -22,7 +22,8 @@ def update_records(pid, list_of_fields_to_values, overwrite="overwrite", return_
     are required for repeat instruments.  All dates must be in Y-M-D format regardless
     of the format definition for the field."""
   buf = cStringIO.StringIO()
-  json_data = '[' + ",".join([ '{' + ",".join(["\"%s\":\"%s\"" % (field, escape_str(str(value))) for field, value in fields_to_values.iteritems()]) + '}' for fields_to_values in list_of_fields_to_values ]) + ']'
+  # TODO remove the value != 'None' and actually fix the source of the problem, just want to know if it is already a string here
+  json_data = '[' + ",".join([ '{' + ",".join(["\"%s\":\"%s\"" % (field, escape_str(str(value)) if value and value != 'None' else "") for field, value in fields_to_values.iteritems()]) + '}' for fields_to_values in list_of_fields_to_values ]) + ']'
   if verbose:
     print "LOG:", json_data
   data = {
@@ -166,15 +167,18 @@ def get_records(pid, instrument_name, primary_key, verbose=False):
     raise RuntimeError("Response code '%d' returned expecting '200'.  Error is '%s'" % (response_code, body))
   return json.load(StringIO(body))
 
-def delete_record(pid, record_id, verbose=False):
+def delete_records(pid, record_ids, verbose=False):
   """Delete all data for a record (e.g. patient), across all instruments"""
   buf = cStringIO.StringIO()
   data = {
       'token': redcap_config.pids_to_tokens[pid],
       'action': 'delete',
-      'content': 'record',
-      'records[0]': record_id
+      'content': 'record'
   }
+  for index, record_id in enumerate(record_ids):
+    data["records[%d]" % (index)] = record_id
+  if verbose:
+    print "LOG: data =", ", ".join([ "%s:%s" % (k, v) for k, v in data.iteritems() ])
   curl = pycurl.Curl()
   curl.setopt(curl.URL, redcap_config.api_url)
   curl.setopt(curl.HTTPPOST, data.items())

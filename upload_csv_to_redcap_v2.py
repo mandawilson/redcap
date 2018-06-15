@@ -15,8 +15,6 @@
 #
 # Author: Manda Wilson
 
-# TODO actually update redcap -- I backed up database already just run with -f option - do twice, second time with -d option
-#   then use original file to get things back to the way they were
 # TODO make sure we get everything from `diff modified_darwin_eight_batches.csv /data/redcap_scratch/darwin_eight_batches.csv`
 # WARNING this is ignoring *_complete fields TODO add back?
 import redcap
@@ -153,7 +151,6 @@ def run(pid, input_stream, primary_key, chunk, delete=False, force=False, verbos
     print "LOG: Deleting the above records? %s" % (delete)
     print "LOG: %d records changed: '%s'" % (len(changed_record_ids), ",".join(changed_record_ids))
   
-  # TODO delete data for modified records and deleted records
   record_ids_to_delete = changed_record_ids
   # we might not want to remove deleted records
   if delete:
@@ -162,31 +159,39 @@ def run(pid, input_stream, primary_key, chunk, delete=False, force=False, verbos
   if verbose:
     print "LOG: we will actually delete %d records from Redcap: '%s'" % (len(record_ids_to_delete), ",".join(record_ids_to_delete))
     print "LOG: we will then add/add back %d records to Redcap '%s'" % (len(record_ids_to_add), ",".join(record_ids_to_add))
-  for record_id in record_ids_to_delete:
+  record_ids_to_delete_list = list(record_ids_to_delete)
+  for start_index in range(0, len(record_ids_to_delete_list), chunk):
+    # batch the records to delete by chunk size
+    chunked_record_ids_to_delete = record_ids_to_delete_list[start_index:min(start_index + chunk, len(record_ids_to_delete_list))]
     if force:
       if verbose:
         print "LOG: deleting record '%s'" % (record_id)
-      redcap_deleted_record_count = redcap.delete_record(pid, record_id, verbose)
-      if redcap_deleted_record_count != 1:
-        print >> sys.stderr, "ERROR: failed to delete record '%s'" % (record_id)
+      redcap_deleted_record_count = redcap.delete_records(pid, chunked_record_ids_to_delete, verbose)
+      if redcap_deleted_record_count != len(chunked_record_ids_to_delete):
+        print >> sys.stderr, "ERROR: failed to delete all records, deleted '%d' of '%d'" % (redcap_deleted_record_count, len(chunked_record_ids_to_delete))
       else:
         if verbose:
           print "LOG: successfully deleted record '%s' from RedCap" % (record_id)
     else:
       if verbose:
-        print "LOG: [TEST NOT] deleting record '%s'" % (record_id)
+        print "LOG: [TEST NOT] deleting records '%s'" % (", ".join(chunked_record_ids_to_delete))
 
+  redcap_data = [] # fully prepared data
   for record_id in record_ids_to_add:
     if force:
       if verbose:
         print "LOG: adding record '%s'" % (record_id)
-      # TODO get rows for record_id
-      # TODO fill in instrument index number
-      redcap_data = get_data_ready_for_redcap(record_id_to_key_to_new_dict[record_id], verbose)
-      update_redcap(set([record_id]), pid, redcap_data, overwrite="normal", return_content="ids", verbose=verbose)
+      redcap_data.extend(get_data_ready_for_redcap(record_id_to_key_to_new_dict[record_id], verbose))
     else:
       if verbose:
         print "LOG: [TEST NOT] adding record '%s'" % (record_id)
+
+  # now chunk redcap data
+  for start_index in range(0, len(redcap_data), chunk):
+    # batch the records to add by chunk size
+    chunked_record_ids_to_add = redcap_data[start_index:min(start_index + chunk, len(redcap_data))]
+    expected_ids = set([row[primary_key] for row in chunked_record_ids_to_add if primary_key in row])
+    update_redcap(expected_ids, pid, chunked_record_ids_to_add, overwrite="normal", return_content="ids", verbose=verbose)
 
 def usage():
   print "Usage:"
